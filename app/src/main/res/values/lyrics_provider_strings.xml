@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="lyrics_choose_provider">Choose lyrics provider</string>
+    <string name="lyrics_provider_current">Current lyrics</string>
+    <string name="lyrics_provider_found">Available — tap to switch</string>
+    <string name="lyrics_provider_not_found">No lyrics found</string>
+    <string name="lyrics_provider_fetching">Loading lyrics…</string>
+    <string name="lyrics_provider_not_fetched">Tap to search this provider</string>
+    <string name="lyrics_provider_retry">Lookup failed — tap to retry</string>
+    <string name="lyrics_provider_disabled">Disabled in lyrics settings</string>
+    <string name="lyrics_provider_unsupported">Unavailable for local files</string>
+    <string name="lyrics_provider_lookup_failed">Could not switch providers. Your current lyrics are still selected.</string>
+</resources>

@@ -1,0 +1,37 @@
+Convx bundles source vendored from third-party open-source projects.
+
+## Lyrics providers
+
+The provider clients and lyric parsers in lyrics/.../lyrics/bitchord are
+adapted from BitChord (https://github.com/kushagrasinghx/BitChord),
+Copyright its contributors, licensed under GPL-3.0. See LICENSE.
+
+## Flamingo lyrics and player controls
+
+The renderer in app/.../ui/component/flamingo and player chrome values
+are adapted from Flamingo (https://github.com/shouryadixitisverycool/Flamingo),
+by Yos-X and contributors, licensed under GPL-3.0. See LICENSE.
+
+## hig module
+
+Portions of the `hig/` module are vendored from compose-hig
+(https://github.com/ienground/compose-hig), Copyright (c) IENGROUND of IENLAB
+and prior contributors (Compose Cupertino project, Scott Lanoue), licensed
+under the Apache License, Version 2.0. See hig/LICENSE for the full license
+text and individual file headers for per-file copyright notices.
+
+## Artwork transitions
+
+The artwork transition timing in `artwork/` is adapted from MeloX-Android
+(https://github.com/lladlam/MeloX-Android), licensed under GPL-3.0.
+See the repository LICENSE for the license text.
+
+## YouTube video discovery
+
+Official music video matching is adapted from Square
+(https://github.com/Lelonio/Square), licensed under GPL-3.0.
+
+## Base project
+
+Convx was originally built on an open-source GPL-3.0 music player and has since diverged
+completely. It remains licensed under the GNU General Public License v3.0 (see LICENSE).

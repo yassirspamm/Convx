@@ -1,0 +1,31 @@
+{
+  "ui_glitches_processed": [
+    {"path": "ui glicthes/Screenshot_20260831-093609.png", "task_id": "013-title-text-ghosting-bug"},
+    {"path": "ui glicthes/Screenshot_20260831-1141352.jpg", "task_id": "011-settings-redesign-beginner-friendly"},
+    {"path": "ui glicthes/Screenshot_20260831-1142332.jpg", "task_id": "011-settings-redesign-beginner-friendly"},
+    {"path": "ui glicthes/Screenshot_20260831-1143132.jpg", "task_id": "012-glass-scope-navbar-miniplayer"},
+    {"path": "ui glicthes/Screenshot_20260831-1145163.jpg", "task_id": "011-settings-redesign-beginner-friendly"},
+    {"path": "ui glicthes/Screenshot_20260831-1146502.jpg", "task_id": "011-settings-redesign-beginner-friendly"},
+    {"path": "ui glicthes/Screenshot_20260831-1147592.jpg", "task_id": "011-settings-redesign-beginner-friendly"},
+    {"path": "ui glicthes/Screenshot_20260831-123759.png", "task_id": "014-recognize-music-statusbar-overlap"},
+    {"path": "ui glicthes/Screenshot_20260831-123909.png", "task_id": "013-title-text-ghosting-bug"},
+    {"path": "ui glicthes/Screenshot_20260831-123949.png", "task_id": "013-title-text-ghosting-bug"},
+    {"path": "ui glicthes/Screenshot_20260831-124044.png", "task_id": "018-player-queue-visual-cleanup"},
+    {"path": "ui glicthes/Screenshot_20260831-124136.png", "task_id": "015-queue-readability-contrast"},
+    {"path": "ui glicthes/Screenshot_20260831-124304.png", "task_id": "016-bluetooth-sheet-cleanup"},
+    {"path": "ui glicthes/Screenshot_20260831-124522.png", "task_id": "017-liked-music-icon-size"},
+    {"path": "ui glicthes/Screenshot_20260831-124607.png", "task_id": "015-queue-readability-contrast"},
+    {"path": "ui glicthes/Screenshot_20260831-124744.png", "task_id": "013-title-text-ghosting-bug"},
+    {"path": "ui glicthes/image0.png", "task_id": "none - unannotated reference, no action"},
+    {"path": "ui glicthes/newui _animataion_that/artist look.jpg", "task_id": "020-album-playlist-detail-look"},
+    {"path": "ui glicthes/newui _animataion_that/artistandplaylist screen animaton and blur an seacrch.mp4", "task_id": "021-video-reference-review"},
+    {"path": "ui glicthes/newui _animataion_that/bounc animaition in glass items .mp4", "task_id": "021-video-reference-review"},
+    {"path": "ui glicthes/newui _animataion_that/playislist looks .jpg", "task_id": "020-album-playlist-detail-look"},
+    {"path": "ui glicthes/newui _animataion_that/shared element morph transisiton .mp4", "task_id": "021-video-reference-review"},
+    {"path": "ui glicthes/newui _animataion_that/tab ui playlist looks .jpg", "task_id": "009-tabview-layout-fix"},
+    {"path": "ui glicthes/newui _animataion_that/topbarmicroanimationAndsharedtranstionAnimation.mp4", "task_id": "021-video-reference-review"},
+    {"path": "ui glicthes/screen-20260831-125605-1788198961779.mp4~2.mp4", "task_id": "021-video-reference-review"},
+    {"path": "ui glicthes/screen-20260831-130113-1788199260633.mp4", "task_id": "021-video-reference-review"},
+    {"path": "ui glicthes/share_8767541273537082027.png", "task_id": "019-dj-sheet-handle-position"}
+  ]
+}

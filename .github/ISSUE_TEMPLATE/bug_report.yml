@@ -1,0 +1,107 @@
+name: Bug report
+description: Something in Convx is broken
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. A clear report gets fixed faster. The maintainer will add severity and area labels.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before you submit
+      options:
+        - label: I'm using the [latest nightly build](https://github.com/cosmictaserdev-creator/Convx/releases/tag/2.0.0-nightly) (or the problem also happens on stable).
+          required: true
+        - label: I searched the existing issues and this isn't a duplicate.
+          required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does it happen?
+      options:
+        - Player (now playing, mini player, queue)
+        - Playback (audio, streaming, crossfade, Automix)
+        - Lyrics
+        - Library, playlists or downloads
+        - Search
+        - Settings
+        - Look and animations (glass, themes)
+        - Accounts (YouTube Music, Spotify, Discord, Last.fm)
+        - Listen Together
+        - Network storage
+        - Widgets or notifications
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often does it happen?
+      options:
+        - Every time
+        - Often
+        - Sometimes
+        - Once or twice
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Tap ...
+        3. See the problem
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: What you expected and what happened
+      placeholder: |
+        Expected: the song starts playing.
+        Actual: the app closes.
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: Convx version
+      description: Settings → Help & About → About. For a nightly, give the date you installed it.
+      placeholder: "2.0.0 nightly"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: build
+    attributes:
+      label: Which build?
+      options:
+        - Nightly
+        - Stable
+        - Debug build I made myself
+    validations:
+      required: true
+
+  - type: input
+    id: android-version
+    attributes:
+      label: Android version and device
+      placeholder: "Android 15, Pixel 8"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, screenshots or a recording
+      description: For a crash, paste the report from Settings → Help & About → Crash report, or `adb logcat` output. Drag screenshots or a screen recording here.
+      render: shell

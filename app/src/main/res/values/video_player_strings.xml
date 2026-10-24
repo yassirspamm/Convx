@@ -1,0 +1,20 @@
+<resources>
+    <string name="video_unavailable">Video could not load</string>
+    <string name="video_retry">Retry video</string>
+    <string name="video_watch">Watch video</string>
+    <string name="video_close">Return to artwork</string>
+    <string name="video_fullscreen">Full screen video</string>
+    <string name="video_exit_fullscreen">Exit full screen</string>
+    <string name="video_play">Play</string>
+    <string name="video_pause">Pause</string>
+    <string name="video_mode_song">Song</string>
+    <string name="video_mode_video">Video</string>
+    <string name="video_seek_back">Back 10 seconds</string>
+    <string name="video_seek_forward">Forward 10 seconds</string>
+    <string name="video_seek">Playback position</string>
+    <string name="video_volume">Volume</string>
+    <string name="video_more">Video options</string>
+    <string name="video_fit">Fit video</string>
+    <string name="video_fill">Fill screen</string>
+    <string name="video_picture_in_picture">Picture in picture</string>
+</resources>

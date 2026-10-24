@@ -1,0 +1,8 @@
+<resources>
+    <string name="eq_edit_band">Edit EQ band</string>
+    <string name="eq_frequency_hint">Center frequency (20–20000 Hz)</string>
+    <string name="eq_q_hint">Q / bandwidth (0.1–20)</string>
+    <string name="eq_band_frequency">%1$.0f Hz</string>
+    <string name="eq_band_q">Q %1$.2f</string>
+    <string name="eq_preamp_value">Preamp: %1$.1f dB</string>
+</resources>

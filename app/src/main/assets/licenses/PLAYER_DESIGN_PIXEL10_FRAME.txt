@@ -1,0 +1,8 @@
+Player design selector device frame
+
+Asset: app/src/main/res/drawable-nodpi/player_design_pixel10_frame.webp
+Source: Android Studio device-art-resources, pixel_10/back.webp
+https://android.googlesource.com/platform/tools/adt/idea/+/refs/heads/mirror-goog-studio-main/artwork/resources/device-art-resources/pixel_10/back.webp
+
+The asset is redistributed under the Apache License, Version 2.0. The license text
+is included in this directory as AndroidStudio-Device-Art-Apache-2.0.txt.

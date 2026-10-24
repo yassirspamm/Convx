@@ -1,0 +1,3 @@
+<resources>
+    <string name="album_load_failed">Impossible de charger cet album. Veuillez réessayer.</string>
+</resources>

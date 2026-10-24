@@ -1,0 +1,2496 @@
+From f0e5d69f1b3d4fa3797087e99e7b4061c821def4 Mon Sep 17 00:00:00 2001
+From: Antigravity <antigravity@local>
+Date: Sun, 25 Oct 2026 02:04:08 +0300
+Subject: [PATCH] feat: architectural, playback, concurrency, db, crash, and
+ security improvements
+
+---
+ app/build.gradle.kts                          |    1 +
+ .../41.json                                   | 1412 +++++++++++++++++
+ .../com/convx/music/db/MusicDatabase.kt       |   22 +-
+ .../music/db/entities/PlaylistSongMap.kt      |    4 +
+ .../convx/music/db/entities/SongArtistMap.kt  |    4 +
+ .../com/convx/music/db/entities/SongEntity.kt |   11 +-
+ .../com/convx/music/playback/DownloadUtil.kt  |    3 +-
+ .../com/convx/music/playback/MusicService.kt  |   65 +-
+ .../playback/audio/SpatialAudioProcessor.kt   |    2 +
+ .../convx/music/playback/smart/BeatTracker.kt |   12 +-
+ .../music/ui/component/GlassScreenChrome.kt   |    3 -
+ .../music/ui/ios/compat/IosCompatSurfaces.kt  |   10 +
+ .../music/ui/player/PlayerPhonePreview.kt     |    8 +-
+ .../kotlin/com/convx/music/ui/theme/Theme.kt  |    2 +
+ .../com/convx/music/utils/YTPlayerUtils.kt    |  292 ++--
+ .../convx/music/utils/cipher/CipherWebView.kt |   48 +-
+ .../music/utils/sabr/EjsNTransformSolver.kt   |   44 +-
+ app/src/main/res/xml/backup_rules.xml         |    3 +
+ .../main/res/xml/data_extraction_rules.xml    |    6 +
+ .../audio/SpatialAudioProcessorTest.kt        |    9 +
+ 20 files changed, 1806 insertions(+), 155 deletions(-)
+ create mode 100644 app/schemas/com.convx.music.db.InternalDatabase/41.json
+
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index 81c0501..d42e145 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -192,6 +192,7 @@ android {
+ 
+     androidResources {
+         generateLocaleConfig = true
++        noCompress += "onnx"
+     }
+ 
+     externalNativeBuild {
+diff --git a/app/schemas/com.convx.music.db.InternalDatabase/41.json b/app/schemas/com.convx.music.db.InternalDatabase/41.json
+new file mode 100644
+index 0000000..1ee4427
+--- /dev/null
++++ b/app/schemas/com.convx.music.db.InternalDatabase/41.json
+@@ -0,0 +1,1412 @@
++{
++  "formatVersion": 1,
++  "database": {
++    "version": 41,
++    "identityHash": "ac6c036a45d66cc6be0c40d0f56105b9",
++    "entities": [
++      {
++        "tableName": "song",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `duration` INTEGER NOT NULL, `thumbnailUrl` TEXT, `albumId` TEXT, `albumName` TEXT, `explicit` INTEGER NOT NULL DEFAULT 0, `year` INTEGER, `date` INTEGER, `dateModified` INTEGER, `liked` INTEGER NOT NULL, `likedDate` INTEGER, `totalPlayTime` INTEGER NOT NULL, `inLibrary` INTEGER, `dateDownload` INTEGER, `isLocal` INTEGER NOT NULL DEFAULT false, `libraryAddToken` TEXT, `libraryRemoveToken` TEXT, `lyricsOffset` INTEGER NOT NULL DEFAULT 0, `romanizeLyrics` INTEGER NOT NULL DEFAULT true, `isDownloaded` INTEGER NOT NULL DEFAULT 0, `isUploaded` INTEGER NOT NULL DEFAULT false, `isVideo` INTEGER NOT NULL DEFAULT false, `isPodcastEpisode` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
++        "fields": [
++          {
++            "fieldPath": "id",
++            "columnName": "id",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "title",
++            "columnName": "title",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "duration",
++            "columnName": "duration",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "thumbnailUrl",
++            "columnName": "thumbnailUrl",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "albumId",
++            "columnName": "albumId",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "albumName",
++            "columnName": "albumName",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "explicit",
++            "columnName": "explicit",
++            "affinity": "INTEGER",
++            "notNull": true,
++            "defaultValue": "0"
++          },
++          {
++            "fieldPath": "year",
++            "columnName": "year",
++            "affinity": "INTEGER"
++          },
++          {
++            "fieldPath": "date",
++            "columnName": "date",
++            "affinity": "INTEGER"
++          },
++          {
++            "fieldPath": "dateModified",
++            "columnName": "dateModified",
++            "affinity": "INTEGER"
++          },
++          {
++            "fieldPath": "liked",
++            "columnName": "liked",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "likedDate",
++            "columnName": "likedDate",
++            "affinity": "INTEGER"
++          },
++          {
++            "fieldPath": "totalPlayTime",
++            "columnName": "totalPlayTime",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "inLibrary",
++            "columnName": "inLibrary",
++            "affinity": "INTEGER"
++          },
++          {
++            "fieldPath": "dateDownload",
++            "columnName": "dateDownload",
++            "affinity": "INTEGER"
++          },
++          {
++            "fieldPath": "isLocal",
++            "columnName": "isLocal",
++            "affinity": "INTEGER",
++            "notNull": true,
++            "defaultValue": "false"
++          },
++          {
++            "fieldPath": "libraryAddToken",
++            "columnName": "libraryAddToken",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "libraryRemoveToken",
++            "columnName": "libraryRemoveToken",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "lyricsOffset",
++            "columnName": "lyricsOffset",
++            "affinity": "INTEGER",
++            "notNull": true,
++            "defaultValue": "0"
++          },
++          {
++            "fieldPath": "romanizeLyrics",
++            "columnName": "romanizeLyrics",
++            "affinity": "INTEGER",
++            "notNull": true,
++            "defaultValue": "true"
++          },
++          {
++            "fieldPath": "isDownloaded",
++            "columnName": "isDownloaded",
++            "affinity": "INTEGER",
++            "notNull": true,
++            "defaultValue": "0"
++          },
++          {
++            "fieldPath": "isUploaded",
++            "columnName": "isUploaded",
++            "affinity": "INTEGER",
++            "notNull": true,
++            "defaultValue": "false"
++          },
++          {
++            "fieldPath": "isVideo",
++            "columnName": "isVideo",
++            "affinity": "INTEGER",
++            "notNull": true,
++            "defaultValue": "false"
++          },
++          {
++            "fieldPath": "isPodcastEpisode",
++            "columnName": "isPodcastEpisode",
++            "affinity": "INTEGER",
++            "notNull": true,
++            "defaultValue": "0"
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": false,
++          "columnNames": [
++            "id"
++          ]
++        },
++        "indices": [
++          {
++            "name": "index_song_albumId",
++            "unique": false,
++            "columnNames": [
++              "albumId"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_song_albumId` ON `${TABLE_NAME}` (`albumId`)"
++          },
++          {
++            "name": "index_song_liked_likedDate",
++            "unique": false,
++            "columnNames": [
++              "liked",
++              "likedDate"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_song_liked_likedDate` ON `${TABLE_NAME}` (`liked`, `likedDate`)"
++          },
++          {
++            "name": "index_song_liked_totalPlayTime",
++            "unique": false,
++            "columnNames": [
++              "liked",
++              "totalPlayTime"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_song_liked_totalPlayTime` ON `${TABLE_NAME}` (`liked`, `totalPlayTime`)"
++          },
++          {
++            "name": "index_song_inLibrary",
++            "unique": false,
++            "columnNames": [
++              "inLibrary"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_song_inLibrary` ON `${TABLE_NAME}` (`inLibrary`)"
++          }
++        ]
++      },
++      {
++        "tableName": "artist",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `thumbnailUrl` TEXT, `channelId` TEXT, `lastUpdateTime` INTEGER NOT NULL, `bookmarkedAt` INTEGER, `isLocal` INTEGER NOT NULL DEFAULT false, PRIMARY KEY(`id`))",
++        "fields": [
++          {
++            "fieldPath": "id",
++            "columnName": "id",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "name",
++            "columnName": "name",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "thumbnailUrl",
++            "columnName": "thumbnailUrl",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "channelId",
++            "columnName": "channelId",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "lastUpdateTime",
++            "columnName": "lastUpdateTime",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "bookmarkedAt",
++            "columnName": "bookmarkedAt",
++            "affinity": "INTEGER"
++          },
++          {
++            "fieldPath": "isLocal",
++            "columnName": "isLocal",
++            "affinity": "INTEGER",
++            "notNull": true,
++            "defaultValue": "false"
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": false,
++          "columnNames": [
++            "id"
++          ]
++        }
++      },
++      {
++        "tableName": "album",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `playlistId` TEXT, `title` TEXT NOT NULL, `year` INTEGER, `thumbnailUrl` TEXT, `themeColor` INTEGER, `songCount` INTEGER NOT NULL, `duration` INTEGER NOT NULL, `explicit` INTEGER NOT NULL DEFAULT 0, `lastUpdateTime` INTEGER NOT NULL, `bookmarkedAt` INTEGER, `likedDate` INTEGER, `inLibrary` INTEGER, `description` TEXT, `isLocal` INTEGER NOT NULL DEFAULT false, `isUploaded` INTEGER NOT NULL DEFAULT false, `pinnedAt` INTEGER, PRIMARY KEY(`id`))",
++        "fields": [
++          {
++            "fieldPath": "id",
++            "columnName": "id",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "playlistId",
++            "columnName": "playlistId",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "title",
++            "columnName": "title",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "year",
++            "columnName": "year",
++            "affinity": "INTEGER"
++          },
++          {
++            "fieldPath": "thumbnailUrl",
++            "columnName": "thumbnailUrl",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "themeColor",
++            "columnName": "themeColor",
++            "affinity": "INTEGER"
++          },
++          {
++            "fieldPath": "songCount",
++            "columnName": "songCount",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "duration",
++            "columnName": "duration",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "explicit",
++            "columnName": "explicit",
++            "affinity": "INTEGER",
++            "notNull": true,
++            "defaultValue": "0"
++          },
++          {
++            "fieldPath": "lastUpdateTime",
++            "columnName": "lastUpdateTime",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "bookmarkedAt",
++            "columnName": "bookmarkedAt",
++            "affinity": "INTEGER"
++          },
++          {
++            "fieldPath": "likedDate",
++            "columnName": "likedDate",
++            "affinity": "INTEGER"
++          },
++          {
++            "fieldPath": "inLibrary",
++            "columnName": "inLibrary",
++            "affinity": "INTEGER"
++          },
++          {
++            "fieldPath": "description",
++            "columnName": "description",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "isLocal",
++            "columnName": "isLocal",
++            "affinity": "INTEGER",
++            "notNull": true,
++            "defaultValue": "false"
++          },
++          {
++            "fieldPath": "isUploaded",
++            "columnName": "isUploaded",
++            "affinity": "INTEGER",
++            "notNull": true,
++            "defaultValue": "false"
++          },
++          {
++            "fieldPath": "pinnedAt",
++            "columnName": "pinnedAt",
++            "affinity": "INTEGER"
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": false,
++          "columnNames": [
++            "id"
++          ]
++        }
++      },
++      {
++        "tableName": "playlist",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `browseId` TEXT, `createdAt` INTEGER, `lastUpdateTime` INTEGER, `isEditable` INTEGER NOT NULL DEFAULT true, `bookmarkedAt` INTEGER, `remoteSongCount` INTEGER, `playEndpointParams` TEXT, `thumbnailUrl` TEXT, `description` TEXT, `shuffleEndpointParams` TEXT, `radioEndpointParams` TEXT, `isLocal` INTEGER NOT NULL DEFAULT false, `isAutoSync` INTEGER NOT NULL DEFAULT false, `pinnedAt` INTEGER, PRIMARY KEY(`id`))",
++        "fields": [
++          {
++            "fieldPath": "id",
++            "columnName": "id",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "name",
++            "columnName": "name",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "browseId",
++            "columnName": "browseId",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "createdAt",
++            "columnName": "createdAt",
++            "affinity": "INTEGER"
++          },
++          {
++            "fieldPath": "lastUpdateTime",
++            "columnName": "lastUpdateTime",
++            "affinity": "INTEGER"
++          },
++          {
++            "fieldPath": "isEditable",
++            "columnName": "isEditable",
++            "affinity": "INTEGER",
++            "notNull": true,
++            "defaultValue": "true"
++          },
++          {
++            "fieldPath": "bookmarkedAt",
++            "columnName": "bookmarkedAt",
++            "affinity": "INTEGER"
++          },
++          {
++            "fieldPath": "remoteSongCount",
++            "columnName": "remoteSongCount",
++            "affinity": "INTEGER"
++          },
++          {
++            "fieldPath": "playEndpointParams",
++            "columnName": "playEndpointParams",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "thumbnailUrl",
++            "columnName": "thumbnailUrl",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "description",
++            "columnName": "description",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "shuffleEndpointParams",
++            "columnName": "shuffleEndpointParams",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "radioEndpointParams",
++            "columnName": "radioEndpointParams",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "isLocal",
++            "columnName": "isLocal",
++            "affinity": "INTEGER",
++            "notNull": true,
++            "defaultValue": "false"
++          },
++          {
++            "fieldPath": "isAutoSync",
++            "columnName": "isAutoSync",
++            "affinity": "INTEGER",
++            "notNull": true,
++            "defaultValue": "false"
++          },
++          {
++            "fieldPath": "pinnedAt",
++            "columnName": "pinnedAt",
++            "affinity": "INTEGER"
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": false,
++          "columnNames": [
++            "id"
++          ]
++        }
++      },
++      {
++        "tableName": "song_artist_map",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`songId` TEXT NOT NULL, `artistId` TEXT NOT NULL, `position` INTEGER NOT NULL, PRIMARY KEY(`songId`, `artistId`), FOREIGN KEY(`songId`) REFERENCES `song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`artistId`) REFERENCES `artist`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
++        "fields": [
++          {
++            "fieldPath": "songId",
++            "columnName": "songId",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "artistId",
++            "columnName": "artistId",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "position",
++            "columnName": "position",
++            "affinity": "INTEGER",
++            "notNull": true
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": false,
++          "columnNames": [
++            "songId",
++            "artistId"
++          ]
++        },
++        "indices": [
++          {
++            "name": "index_song_artist_map_songId",
++            "unique": false,
++            "columnNames": [
++              "songId"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_song_artist_map_songId` ON `${TABLE_NAME}` (`songId`)"
++          },
++          {
++            "name": "index_song_artist_map_artistId",
++            "unique": false,
++            "columnNames": [
++              "artistId"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_song_artist_map_artistId` ON `${TABLE_NAME}` (`artistId`)"
++          },
++          {
++            "name": "index_song_artist_map_songId_position",
++            "unique": false,
++            "columnNames": [
++              "songId",
++              "position"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_song_artist_map_songId_position` ON `${TABLE_NAME}` (`songId`, `position`)"
++          }
++        ],
++        "foreignKeys": [
++          {
++            "table": "song",
++            "onDelete": "CASCADE",
++            "onUpdate": "NO ACTION",
++            "columns": [
++              "songId"
++            ],
++            "referencedColumns": [
++              "id"
++            ]
++          },
++          {
++            "table": "artist",
++            "onDelete": "CASCADE",
++            "onUpdate": "NO ACTION",
++            "columns": [
++              "artistId"
++            ],
++            "referencedColumns": [
++              "id"
++            ]
++          }
++        ]
++      },
++      {
++        "tableName": "song_album_map",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`songId` TEXT NOT NULL, `albumId` TEXT NOT NULL, `index` INTEGER NOT NULL, PRIMARY KEY(`songId`, `albumId`), FOREIGN KEY(`songId`) REFERENCES `song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`albumId`) REFERENCES `album`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
++        "fields": [
++          {
++            "fieldPath": "songId",
++            "columnName": "songId",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "albumId",
++            "columnName": "albumId",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "index",
++            "columnName": "index",
++            "affinity": "INTEGER",
++            "notNull": true
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": false,
++          "columnNames": [
++            "songId",
++            "albumId"
++          ]
++        },
++        "indices": [
++          {
++            "name": "index_song_album_map_songId",
++            "unique": false,
++            "columnNames": [
++              "songId"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_song_album_map_songId` ON `${TABLE_NAME}` (`songId`)"
++          },
++          {
++            "name": "index_song_album_map_albumId",
++            "unique": false,
++            "columnNames": [
++              "albumId"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_song_album_map_albumId` ON `${TABLE_NAME}` (`albumId`)"
++          }
++        ],
++        "foreignKeys": [
++          {
++            "table": "song",
++            "onDelete": "CASCADE",
++            "onUpdate": "NO ACTION",
++            "columns": [
++              "songId"
++            ],
++            "referencedColumns": [
++              "id"
++            ]
++          },
++          {
++            "table": "album",
++            "onDelete": "CASCADE",
++            "onUpdate": "NO ACTION",
++            "columns": [
++              "albumId"
++            ],
++            "referencedColumns": [
++              "id"
++            ]
++          }
++        ]
++      },
++      {
++        "tableName": "album_artist_map",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`albumId` TEXT NOT NULL, `artistId` TEXT NOT NULL, `order` INTEGER NOT NULL, PRIMARY KEY(`albumId`, `artistId`), FOREIGN KEY(`albumId`) REFERENCES `album`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`artistId`) REFERENCES `artist`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
++        "fields": [
++          {
++            "fieldPath": "albumId",
++            "columnName": "albumId",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "artistId",
++            "columnName": "artistId",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "order",
++            "columnName": "order",
++            "affinity": "INTEGER",
++            "notNull": true
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": false,
++          "columnNames": [
++            "albumId",
++            "artistId"
++          ]
++        },
++        "indices": [
++          {
++            "name": "index_album_artist_map_albumId",
++            "unique": false,
++            "columnNames": [
++              "albumId"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_album_artist_map_albumId` ON `${TABLE_NAME}` (`albumId`)"
++          },
++          {
++            "name": "index_album_artist_map_artistId",
++            "unique": false,
++            "columnNames": [
++              "artistId"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_album_artist_map_artistId` ON `${TABLE_NAME}` (`artistId`)"
++          }
++        ],
++        "foreignKeys": [
++          {
++            "table": "album",
++            "onDelete": "CASCADE",
++            "onUpdate": "NO ACTION",
++            "columns": [
++              "albumId"
++            ],
++            "referencedColumns": [
++              "id"
++            ]
++          },
++          {
++            "table": "artist",
++            "onDelete": "CASCADE",
++            "onUpdate": "NO ACTION",
++            "columns": [
++              "artistId"
++            ],
++            "referencedColumns": [
++              "id"
++            ]
++          }
++        ]
++      },
++      {
++        "tableName": "playlist_song_map",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `playlistId` TEXT NOT NULL, `songId` TEXT NOT NULL, `position` INTEGER NOT NULL, `setVideoId` TEXT, FOREIGN KEY(`playlistId`) REFERENCES `playlist`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`songId`) REFERENCES `song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
++        "fields": [
++          {
++            "fieldPath": "id",
++            "columnName": "id",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "playlistId",
++            "columnName": "playlistId",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "songId",
++            "columnName": "songId",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "position",
++            "columnName": "position",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "setVideoId",
++            "columnName": "setVideoId",
++            "affinity": "TEXT"
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": true,
++          "columnNames": [
++            "id"
++          ]
++        },
++        "indices": [
++          {
++            "name": "index_playlist_song_map_playlistId",
++            "unique": false,
++            "columnNames": [
++              "playlistId"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_playlist_song_map_playlistId` ON `${TABLE_NAME}` (`playlistId`)"
++          },
++          {
++            "name": "index_playlist_song_map_songId",
++            "unique": false,
++            "columnNames": [
++              "songId"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_playlist_song_map_songId` ON `${TABLE_NAME}` (`songId`)"
++          },
++          {
++            "name": "index_playlist_song_map_playlistId_position",
++            "unique": false,
++            "columnNames": [
++              "playlistId",
++              "position"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_playlist_song_map_playlistId_position` ON `${TABLE_NAME}` (`playlistId`, `position`)"
++          }
++        ],
++        "foreignKeys": [
++          {
++            "table": "playlist",
++            "onDelete": "CASCADE",
++            "onUpdate": "NO ACTION",
++            "columns": [
++              "playlistId"
++            ],
++            "referencedColumns": [
++              "id"
++            ]
++          },
++          {
++            "table": "song",
++            "onDelete": "CASCADE",
++            "onUpdate": "NO ACTION",
++            "columns": [
++              "songId"
++            ],
++            "referencedColumns": [
++              "id"
++            ]
++          }
++        ]
++      },
++      {
++        "tableName": "search_history",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `query` TEXT NOT NULL)",
++        "fields": [
++          {
++            "fieldPath": "id",
++            "columnName": "id",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "query",
++            "columnName": "query",
++            "affinity": "TEXT",
++            "notNull": true
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": true,
++          "columnNames": [
++            "id"
++          ]
++        },
++        "indices": [
++          {
++            "name": "index_search_history_query",
++            "unique": true,
++            "columnNames": [
++              "query"
++            ],
++            "orders": [],
++            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_search_history_query` ON `${TABLE_NAME}` (`query`)"
++          }
++        ]
++      },
++      {
++        "tableName": "format",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `itag` INTEGER NOT NULL, `mimeType` TEXT NOT NULL, `codecs` TEXT NOT NULL, `bitrate` INTEGER NOT NULL, `sampleRate` INTEGER, `contentLength` INTEGER NOT NULL, `loudnessDb` REAL, `perceptualLoudnessDb` REAL, `playbackUrl` TEXT, PRIMARY KEY(`id`))",
++        "fields": [
++          {
++            "fieldPath": "id",
++            "columnName": "id",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "itag",
++            "columnName": "itag",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "mimeType",
++            "columnName": "mimeType",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "codecs",
++            "columnName": "codecs",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "bitrate",
++            "columnName": "bitrate",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "sampleRate",
++            "columnName": "sampleRate",
++            "affinity": "INTEGER"
++          },
++          {
++            "fieldPath": "contentLength",
++            "columnName": "contentLength",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "loudnessDb",
++            "columnName": "loudnessDb",
++            "affinity": "REAL"
++          },
++          {
++            "fieldPath": "perceptualLoudnessDb",
++            "columnName": "perceptualLoudnessDb",
++            "affinity": "REAL"
++          },
++          {
++            "fieldPath": "playbackUrl",
++            "columnName": "playbackUrl",
++            "affinity": "TEXT"
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": false,
++          "columnNames": [
++            "id"
++          ]
++        }
++      },
++      {
++        "tableName": "lyrics",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `lyrics` TEXT NOT NULL, `provider` TEXT NOT NULL DEFAULT 'Unknown', `translatedLyrics` TEXT NOT NULL DEFAULT '', `translationLanguage` TEXT NOT NULL DEFAULT '', `translationMode` TEXT NOT NULL DEFAULT '', PRIMARY KEY(`id`))",
++        "fields": [
++          {
++            "fieldPath": "id",
++            "columnName": "id",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "lyrics",
++            "columnName": "lyrics",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "provider",
++            "columnName": "provider",
++            "affinity": "TEXT",
++            "notNull": true,
++            "defaultValue": "'Unknown'"
++          },
++          {
++            "fieldPath": "translatedLyrics",
++            "columnName": "translatedLyrics",
++            "affinity": "TEXT",
++            "notNull": true,
++            "defaultValue": "''"
++          },
++          {
++            "fieldPath": "translationLanguage",
++            "columnName": "translationLanguage",
++            "affinity": "TEXT",
++            "notNull": true,
++            "defaultValue": "''"
++          },
++          {
++            "fieldPath": "translationMode",
++            "columnName": "translationMode",
++            "affinity": "TEXT",
++            "notNull": true,
++            "defaultValue": "''"
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": false,
++          "columnNames": [
++            "id"
++          ]
++        }
++      },
++      {
++        "tableName": "event",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `songId` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `playTime` INTEGER NOT NULL, FOREIGN KEY(`songId`) REFERENCES `song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
++        "fields": [
++          {
++            "fieldPath": "id",
++            "columnName": "id",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "songId",
++            "columnName": "songId",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "timestamp",
++            "columnName": "timestamp",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "playTime",
++            "columnName": "playTime",
++            "affinity": "INTEGER",
++            "notNull": true
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": true,
++          "columnNames": [
++            "id"
++          ]
++        },
++        "indices": [
++          {
++            "name": "index_event_songId",
++            "unique": false,
++            "columnNames": [
++              "songId"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_event_songId` ON `${TABLE_NAME}` (`songId`)"
++          },
++          {
++            "name": "index_event_timestamp",
++            "unique": false,
++            "columnNames": [
++              "timestamp"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_event_timestamp` ON `${TABLE_NAME}` (`timestamp`)"
++          }
++        ],
++        "foreignKeys": [
++          {
++            "table": "song",
++            "onDelete": "CASCADE",
++            "onUpdate": "NO ACTION",
++            "columns": [
++              "songId"
++            ],
++            "referencedColumns": [
++              "id"
++            ]
++          }
++        ]
++      },
++      {
++        "tableName": "related_song_map",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `songId` TEXT NOT NULL, `relatedSongId` TEXT NOT NULL, FOREIGN KEY(`songId`) REFERENCES `song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`relatedSongId`) REFERENCES `song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
++        "fields": [
++          {
++            "fieldPath": "id",
++            "columnName": "id",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "songId",
++            "columnName": "songId",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "relatedSongId",
++            "columnName": "relatedSongId",
++            "affinity": "TEXT",
++            "notNull": true
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": true,
++          "columnNames": [
++            "id"
++          ]
++        },
++        "indices": [
++          {
++            "name": "index_related_song_map_songId",
++            "unique": false,
++            "columnNames": [
++              "songId"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_related_song_map_songId` ON `${TABLE_NAME}` (`songId`)"
++          },
++          {
++            "name": "index_related_song_map_relatedSongId",
++            "unique": false,
++            "columnNames": [
++              "relatedSongId"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_related_song_map_relatedSongId` ON `${TABLE_NAME}` (`relatedSongId`)"
++          }
++        ],
++        "foreignKeys": [
++          {
++            "table": "song",
++            "onDelete": "CASCADE",
++            "onUpdate": "NO ACTION",
++            "columns": [
++              "songId"
++            ],
++            "referencedColumns": [
++              "id"
++            ]
++          },
++          {
++            "table": "song",
++            "onDelete": "CASCADE",
++            "onUpdate": "NO ACTION",
++            "columns": [
++              "relatedSongId"
++            ],
++            "referencedColumns": [
++              "id"
++            ]
++          }
++        ]
++      },
++      {
++        "tableName": "set_video_id",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`videoId` TEXT NOT NULL, `setVideoId` TEXT, PRIMARY KEY(`videoId`))",
++        "fields": [
++          {
++            "fieldPath": "videoId",
++            "columnName": "videoId",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "setVideoId",
++            "columnName": "setVideoId",
++            "affinity": "TEXT"
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": false,
++          "columnNames": [
++            "videoId"
++          ]
++        }
++      },
++      {
++        "tableName": "playCount",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`song` TEXT NOT NULL, `year` INTEGER NOT NULL, `month` INTEGER NOT NULL, `count` INTEGER NOT NULL, PRIMARY KEY(`song`, `year`, `month`))",
++        "fields": [
++          {
++            "fieldPath": "song",
++            "columnName": "song",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "year",
++            "columnName": "year",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "month",
++            "columnName": "month",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "count",
++            "columnName": "count",
++            "affinity": "INTEGER",
++            "notNull": true
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": false,
++          "columnNames": [
++            "song",
++            "year",
++            "month"
++          ]
++        }
++      },
++      {
++        "tableName": "recognition_history",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `trackId` TEXT NOT NULL, `title` TEXT NOT NULL, `artist` TEXT NOT NULL, `album` TEXT, `coverArtUrl` TEXT, `coverArtHqUrl` TEXT, `genre` TEXT, `releaseDate` TEXT, `label` TEXT, `shazamUrl` TEXT, `appleMusicUrl` TEXT, `spotifyUrl` TEXT, `isrc` TEXT, `youtubeVideoId` TEXT, `recognizedAt` INTEGER NOT NULL, `liked` INTEGER NOT NULL)",
++        "fields": [
++          {
++            "fieldPath": "id",
++            "columnName": "id",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "trackId",
++            "columnName": "trackId",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "title",
++            "columnName": "title",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "artist",
++            "columnName": "artist",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "album",
++            "columnName": "album",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "coverArtUrl",
++            "columnName": "coverArtUrl",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "coverArtHqUrl",
++            "columnName": "coverArtHqUrl",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "genre",
++            "columnName": "genre",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "releaseDate",
++            "columnName": "releaseDate",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "label",
++            "columnName": "label",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "shazamUrl",
++            "columnName": "shazamUrl",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "appleMusicUrl",
++            "columnName": "appleMusicUrl",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "spotifyUrl",
++            "columnName": "spotifyUrl",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "isrc",
++            "columnName": "isrc",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "youtubeVideoId",
++            "columnName": "youtubeVideoId",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "recognizedAt",
++            "columnName": "recognizedAt",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "liked",
++            "columnName": "liked",
++            "affinity": "INTEGER",
++            "notNull": true
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": true,
++          "columnNames": [
++            "id"
++          ]
++        },
++        "indices": [
++          {
++            "name": "index_recognition_history_trackId",
++            "unique": false,
++            "columnNames": [
++              "trackId"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_recognition_history_trackId` ON `${TABLE_NAME}` (`trackId`)"
++          }
++        ]
++      },
++      {
++        "tableName": "speed_dial_item",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `secondaryId` TEXT, `title` TEXT NOT NULL, `subtitle` TEXT, `thumbnailUrl` TEXT, `type` TEXT NOT NULL, `explicit` INTEGER NOT NULL, `createDate` INTEGER NOT NULL, PRIMARY KEY(`id`))",
++        "fields": [
++          {
++            "fieldPath": "id",
++            "columnName": "id",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "secondaryId",
++            "columnName": "secondaryId",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "title",
++            "columnName": "title",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "subtitle",
++            "columnName": "subtitle",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "thumbnailUrl",
++            "columnName": "thumbnailUrl",
++            "affinity": "TEXT"
++          },
++          {
++            "fieldPath": "type",
++            "columnName": "type",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "explicit",
++            "columnName": "explicit",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "createDate",
++            "columnName": "createDate",
++            "affinity": "INTEGER",
++            "notNull": true
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": false,
++          "columnNames": [
++            "id"
++          ]
++        }
++      },
++      {
++        "tableName": "song_analysis",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `bpm` REAL NOT NULL, `anchorBeatMs` REAL NOT NULL, `bpmConfidence` REAL NOT NULL, `keyIndex` INTEGER NOT NULL, `keyIsMinor` INTEGER NOT NULL, `keyConfidence` REAL NOT NULL, `energyProfile` BLOB NOT NULL, `analyzedAt` INTEGER NOT NULL, `analysisVersion` INTEGER NOT NULL, PRIMARY KEY(`id`))",
++        "fields": [
++          {
++            "fieldPath": "id",
++            "columnName": "id",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "bpm",
++            "columnName": "bpm",
++            "affinity": "REAL",
++            "notNull": true
++          },
++          {
++            "fieldPath": "anchorBeatMs",
++            "columnName": "anchorBeatMs",
++            "affinity": "REAL",
++            "notNull": true
++          },
++          {
++            "fieldPath": "bpmConfidence",
++            "columnName": "bpmConfidence",
++            "affinity": "REAL",
++            "notNull": true
++          },
++          {
++            "fieldPath": "keyIndex",
++            "columnName": "keyIndex",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "keyIsMinor",
++            "columnName": "keyIsMinor",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "keyConfidence",
++            "columnName": "keyConfidence",
++            "affinity": "REAL",
++            "notNull": true
++          },
++          {
++            "fieldPath": "energyProfile",
++            "columnName": "energyProfile",
++            "affinity": "BLOB",
++            "notNull": true
++          },
++          {
++            "fieldPath": "analyzedAt",
++            "columnName": "analyzedAt",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "analysisVersion",
++            "columnName": "analysisVersion",
++            "affinity": "INTEGER",
++            "notNull": true
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": false,
++          "columnNames": [
++            "id"
++          ]
++        }
++      }
++    ],
++    "views": [
++      {
++        "viewName": "sorted_song_artist_map",
++        "createSql": "CREATE VIEW `${VIEW_NAME}` AS SELECT * FROM song_artist_map ORDER BY position"
++      },
++      {
++        "viewName": "sorted_song_album_map",
++        "createSql": "CREATE VIEW `${VIEW_NAME}` AS SELECT * FROM song_album_map ORDER BY `index`"
++      },
++      {
++        "viewName": "playlist_song_map_preview",
++        "createSql": "CREATE VIEW `${VIEW_NAME}` AS SELECT * FROM playlist_song_map WHERE position <= 3 ORDER BY position"
++      }
++    ],
++    "setupQueries": [
++      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
++      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ac6c036a45d66cc6be0c40d0f56105b9')"
++    ]
++  }
++}
+diff --git a/app/src/main/kotlin/com/convx/music/db/MusicDatabase.kt b/app/src/main/kotlin/com/convx/music/db/MusicDatabase.kt
+index e5ec85c..fc820e9 100644
+--- a/app/src/main/kotlin/com/convx/music/db/MusicDatabase.kt
++++ b/app/src/main/kotlin/com/convx/music/db/MusicDatabase.kt
+@@ -115,7 +115,7 @@ class MusicDatabase(
+         SortedSongAlbumMap::class,
+         PlaylistSongMapPreview::class,
+     ],
+-    version = 40,
++    version = 41,
+     exportSchema = true,
+     autoMigrations = [
+         AutoMigration(from = 2, to = 3),
+@@ -176,6 +176,7 @@ abstract class InternalDatabase : RoomDatabase() {
+                         MIGRATION_24_25,
+                         MIGRATION_35_36,
+                         MIGRATION_39_40,
++                        MIGRATION_40_41,
+                     )
+                     .fallbackToDestructiveMigrationOnDowngrade()
+                     .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+@@ -185,10 +186,10 @@ abstract class InternalDatabase : RoomDatabase() {
+                         override fun onOpen(db: SupportSQLiteDatabase) {
+                             super.onOpen(db)
+                             try {
+-                                db.query("PRAGMA busy_timeout = 60000").close()
+-                                db.query("PRAGMA cache_size = -16000").close()
+-                                db.query("PRAGMA wal_autocheckpoint = 1000").close()
+-                                db.query("PRAGMA synchronous = NORMAL").close()
++                                db.execSQL("PRAGMA busy_timeout = 60000")
++                                db.execSQL("PRAGMA cache_size = -16000")
++                                db.execSQL("PRAGMA wal_autocheckpoint = 1000")
++                                db.execSQL("PRAGMA synchronous = NORMAL")
+                             } catch (e: Exception) {
+                                 Timber.tag("MusicDatabase").e(e, "Failed to set PRAGMA settings")
+                             }
+@@ -201,6 +202,17 @@ abstract class InternalDatabase : RoomDatabase() {
+ 
+ // Migrations.
+ 
++val MIGRATION_40_41 =
++    object : Migration(40, 41) {
++        override fun migrate(db: SupportSQLiteDatabase) {
++            db.execSQL("CREATE INDEX IF NOT EXISTS `index_song_liked_likedDate` ON `song` (`liked`, `likedDate`)")
++            db.execSQL("CREATE INDEX IF NOT EXISTS `index_song_liked_totalPlayTime` ON `song` (`liked`, `totalPlayTime`)")
++            db.execSQL("CREATE INDEX IF NOT EXISTS `index_song_inLibrary` ON `song` (`inLibrary`)")
++            db.execSQL("CREATE INDEX IF NOT EXISTS `index_playlist_song_map_playlistId_position` ON `playlist_song_map` (`playlistId`, `position`)")
++            db.execSQL("CREATE INDEX IF NOT EXISTS `index_song_artist_map_songId_position` ON `song_artist_map` (`songId`, `position`)")
++        }
++    }
++
+ val MIGRATION_39_40 =
+     object : Migration(39, 40) {
+         override fun migrate(db: SupportSQLiteDatabase) {
+diff --git a/app/src/main/kotlin/com/convx/music/db/entities/PlaylistSongMap.kt b/app/src/main/kotlin/com/convx/music/db/entities/PlaylistSongMap.kt
+index 8709dd6..e2a3945 100644
+--- a/app/src/main/kotlin/com/convx/music/db/entities/PlaylistSongMap.kt
++++ b/app/src/main/kotlin/com/convx/music/db/entities/PlaylistSongMap.kt
+@@ -8,10 +8,14 @@ package com.convx.music.db.entities
+ import androidx.room.ColumnInfo
+ import androidx.room.Entity
+ import androidx.room.ForeignKey
++import androidx.room.Index
+ import androidx.room.PrimaryKey
+ 
+ @Entity(
+     tableName = "playlist_song_map",
++    indices = [
++        Index(value = ["playlistId", "position"]),
++    ],
+     foreignKeys = [
+         ForeignKey(
+             entity = PlaylistEntity::class,
+diff --git a/app/src/main/kotlin/com/convx/music/db/entities/SongArtistMap.kt b/app/src/main/kotlin/com/convx/music/db/entities/SongArtistMap.kt
+index fb80305..df7710e 100644
+--- a/app/src/main/kotlin/com/convx/music/db/entities/SongArtistMap.kt
++++ b/app/src/main/kotlin/com/convx/music/db/entities/SongArtistMap.kt
+@@ -8,10 +8,14 @@ package com.convx.music.db.entities
+ import androidx.room.ColumnInfo
+ import androidx.room.Entity
+ import androidx.room.ForeignKey
++import androidx.room.Index
+ 
+ @Entity(
+     tableName = "song_artist_map",
+     primaryKeys = ["songId", "artistId"],
++    indices = [
++        Index(value = ["songId", "position"]),
++    ],
+     foreignKeys = [
+         ForeignKey(
+             entity = SongEntity::class,
+diff --git a/app/src/main/kotlin/com/convx/music/db/entities/SongEntity.kt b/app/src/main/kotlin/com/convx/music/db/entities/SongEntity.kt
+index 12bec24..483d7f8 100644
+--- a/app/src/main/kotlin/com/convx/music/db/entities/SongEntity.kt
++++ b/app/src/main/kotlin/com/convx/music/db/entities/SongEntity.kt
+@@ -22,7 +22,16 @@ import java.time.LocalDateTime
+     indices = [
+         Index(
+             value = ["albumId"]
+-        )
++        ),
++        Index(
++            value = ["liked", "likedDate"]
++        ),
++        Index(
++            value = ["liked", "totalPlayTime"]
++        ),
++        Index(
++            value = ["inLibrary"]
++        ),
+     ]
+ )
+ data class SongEntity(
+diff --git a/app/src/main/kotlin/com/convx/music/playback/DownloadUtil.kt b/app/src/main/kotlin/com/convx/music/playback/DownloadUtil.kt
+index 9bbe19e..a007e62 100644
+--- a/app/src/main/kotlin/com/convx/music/playback/DownloadUtil.kt
++++ b/app/src/main/kotlin/com/convx/music/playback/DownloadUtil.kt
+@@ -325,8 +325,7 @@ constructor(
+ 
+     private fun downloadStreamUrl(playbackData: YTPlayerUtils.PlaybackData): String = when {
+         playbackData.isHlsStream || playbackData.isDashStream -> HlsJoinDataSource.uriFor(playbackData.streamUrl).toString()
+-        playbackData.isSaavnStream || playbackData.isTidalStream || playbackData.isSpineStream -> playbackData.streamUrl
+-        else -> "${playbackData.streamUrl}&range=0-${playbackData.format.contentLength ?: 10_000_000}"
++        else -> playbackData.streamUrl
+     }
+ 
+     // Separate joined HLS bytes from any cached YouTube rendition.
+diff --git a/app/src/main/kotlin/com/convx/music/playback/MusicService.kt b/app/src/main/kotlin/com/convx/music/playback/MusicService.kt
+index 0345bcf..3b606bd 100644
+--- a/app/src/main/kotlin/com/convx/music/playback/MusicService.kt
++++ b/app/src/main/kotlin/com/convx/music/playback/MusicService.kt
+@@ -1,4 +1,4 @@
+-﻿/**
++/**
+  * Convx Project (C) 2026
+  * Licensed under GPL-3.0 | See git history for contributors
+  */
+@@ -1251,6 +1251,12 @@ class MusicService :
+             }
+         }
+ 
++        scope.launch {
++            dataStore.data.collect { prefs ->
++                updateStreamPreferenceFingerprint(prefs)
++            }
++        }
++
+         scope.launch {
+             dataStore.data
+                 .map { it[IpVersionKey]?.toEnum(IpVersion.AUTO) ?: IpVersion.AUTO }
+@@ -3422,6 +3428,28 @@ class MusicService :
+         (prefs[ForceSelectedQualityKey] ?: false).toString(),
+     )
+ 
++    private data class StreamPreferenceFingerprintCache(
++        val hasLossless: Boolean,
++        val baseFingerprintPart: String,
++    )
++
++    @Volatile
++    private var streamPreferenceFingerprintCache: StreamPreferenceFingerprintCache? = null
++
++    private fun updateStreamPreferenceFingerprint(prefs: androidx.datastore.preferences.core.Preferences) {
++        val enabledModules = prefs[EnabledModulesKey] ?: "[]"
++        val hasModules = runCatching { org.json.JSONArray(enabledModules).length() > 0 }.getOrDefault(false)
++        val hasLossless = hasModules || (prefs[EnableTidalStreamingKey] == true) || (prefs[EnableSaavnStreamingKey] == true)
++        val baseParts = streamSourcePreferences(prefs) + listOf(
++            prefs[AudioQualityKey].orEmpty(),
++            (prefs[DataSaverEnabledKey] ?: false).toString(),
++        )
++        streamPreferenceFingerprintCache = StreamPreferenceFingerprintCache(
++            hasLossless = hasLossless,
++            baseFingerprintPart = baseParts.joinToString("") { "${it.length}:$it" },
++        )
++    }
++
+     private data class ResolvedStream(
+         val uri: android.net.Uri,
+         val directFile: Boolean,
+@@ -3431,22 +3459,33 @@ class MusicService :
+     /** Resolves stream URLs, builds data sources, and prefetches upcoming tracks. */
+     inner class StreamResolver {
+ 
+-        /** Reads DataStore synchronously; call from a loader or IO thread. */
++        /** Cached in memory and updated asynchronously; non-blocking. */
+         fun effectiveCacheKey(mediaId: String): String {
+-            val prefs = runBlocking { dataStore.data.first() }
+-            val enabledModules = prefs[EnabledModulesKey] ?: "[]"
+-            val hasModules = runCatching { org.json.JSONArray(enabledModules).length() > 0 }.getOrDefault(false)
+             val fallbackSuffix = if (forceAacAudioMediaIds.contains(mediaId)) "#aac" else ""
+             val videoMode = mediaId in videoModeMediaIds
+             val forceStandard = mediaId in forceStandardAudioMediaIds
+-            if (!hasModules && prefs[EnableTidalStreamingKey] != true && prefs[EnableSaavnStreamingKey] != true &&
+-                !videoMode && !forceStandard
+-            ) return "$mediaId$fallbackSuffix"
+-            val fingerprint = (streamSourcePreferences(prefs) + listOf(
+-                prefs[AudioQualityKey].orEmpty(), (prefs[DataSaverEnabledKey] ?: false).toString(),
+-                videoMode.toString(), forceStandard.toString(),
+-            )).joinToString("") { "${it.length}:$it" }
+-            val digest = java.security.MessageDigest.getInstance("SHA-256").digest(fingerprint.toByteArray())
++
++            val cache = streamPreferenceFingerprintCache ?: runCatching {
++                kotlinx.coroutines.runBlocking { dataStore.data.first() }.also { updateStreamPreferenceFingerprint(it) }
++                streamPreferenceFingerprintCache
++            }.getOrNull()
++            if (cache != null) {
++                if (!cache.hasLossless && !videoMode && !forceStandard) {
++                    return "$mediaId$fallbackSuffix"
++                }
++                val trackFingerprint = cache.baseFingerprintPart + listOf(
++                    videoMode.toString(),
++                    forceStandard.toString(),
++                ).joinToString("") { "${it.length}:$it" }
++                val digest = java.security.MessageDigest.getInstance("SHA-256")
++                    .digest(trackFingerprint.toByteArray())
++                    .joinToString("") { "%02x".format(it) }
++                return "$mediaId#source-$digest$fallbackSuffix"
++            }
++
++            if (!videoMode && !forceStandard) return "$mediaId$fallbackSuffix"
++            val trackParts = listOf(videoMode.toString(), forceStandard.toString()).joinToString("") { "${it.length}:$it" }
++            val digest = java.security.MessageDigest.getInstance("SHA-256").digest(trackParts.toByteArray())
+                 .joinToString("") { "%02x".format(it) }
+             return "$mediaId#source-$digest$fallbackSuffix"
+         }
+diff --git a/app/src/main/kotlin/com/convx/music/playback/audio/SpatialAudioProcessor.kt b/app/src/main/kotlin/com/convx/music/playback/audio/SpatialAudioProcessor.kt
+index 5c1bf2f..e2d5631 100644
+--- a/app/src/main/kotlin/com/convx/music/playback/audio/SpatialAudioProcessor.kt
++++ b/app/src/main/kotlin/com/convx/music/playback/audio/SpatialAudioProcessor.kt
+@@ -147,6 +147,8 @@ class SpatialAudioProcessor : BaseAudioProcessor() {
+         return if (borrowed.hasRemaining()) borrowed else processed
+     }
+ 
++    override fun isActive(): Boolean = enabled && super.isActive()
++
+     override fun isEnded(): Boolean = super.isEnded() && !borrowedOutput.hasRemaining()
+ 
+     private fun clampToShort(value: Float): Short =
+diff --git a/app/src/main/kotlin/com/convx/music/playback/smart/BeatTracker.kt b/app/src/main/kotlin/com/convx/music/playback/smart/BeatTracker.kt
+index 5697dd8..9a6917a 100644
+--- a/app/src/main/kotlin/com/convx/music/playback/smart/BeatTracker.kt
++++ b/app/src/main/kotlin/com/convx/music/playback/smart/BeatTracker.kt
+@@ -1,4 +1,4 @@
+-﻿/*
++/*
+  * Ported from Orchard (https://github.com/SFG5453/Orchard).
+  *
+  * Copyright (C) 2026 SFG545 (original Orchard implementation)
+@@ -58,12 +58,8 @@ class BeatTracker(private val context: Context) {
+             session?.let { return it }
+             return runCatching {
+                 File(context.filesDir, STALE_MODEL_ASSET).delete()
+-                val file = File(context.filesDir, MODEL_ASSET)
+-                if (!file.exists() || file.length() == 0L) {
+-                    context.assets.open(MODEL_ASSET).use { input ->
+-                        file.outputStream().use { output -> input.copyTo(output) }
+-                    }
+-                }
++                File(context.filesDir, MODEL_ASSET).delete()
++                val modelBytes = context.assets.open(MODEL_ASSET).use { it.readBytes() }
+                 val options = OrtSession.SessionOptions().apply {
+                     setIntraOpNumThreads(INFERENCE_THREADS)
+                     setInterOpNumThreads(1)
+@@ -75,7 +71,7 @@ class BeatTracker(private val context: Context) {
+                     setMemoryPatternOptimization(false)
+                 }
+                 try {
+-                    OrtEnvironment.getEnvironment().createSession(file.absolutePath, options).also {
++                    OrtEnvironment.getEnvironment().createSession(modelBytes, options).also {
+                         sessionOptions = options
+                         session = it
+                     }
+diff --git a/app/src/main/kotlin/com/convx/music/ui/component/GlassScreenChrome.kt b/app/src/main/kotlin/com/convx/music/ui/component/GlassScreenChrome.kt
+index 3bedef1..af92f33 100644
+--- a/app/src/main/kotlin/com/convx/music/ui/component/GlassScreenChrome.kt
++++ b/app/src/main/kotlin/com/convx/music/ui/component/GlassScreenChrome.kt
+@@ -36,9 +36,6 @@ class GlassScreenChrome internal constructor(
+     /** Apply to the screen's scrolling root (LazyColumn/Column/etc). */
+     fun contentModifier(): Modifier = Modifier
+         .nestedScroll(freeze.connection)
+-        // Isolate sibling redraws and flatten list content for the backdrop capture.
+-        .graphicsLayer()
+-        .layerBackdrop(backdrop, frozen = freeze.frozen)
+         .graphicsLayer()
+ }
+ 
+diff --git a/app/src/main/kotlin/com/convx/music/ui/ios/compat/IosCompatSurfaces.kt b/app/src/main/kotlin/com/convx/music/ui/ios/compat/IosCompatSurfaces.kt
+index c13efcf..74c4e5b 100644
+--- a/app/src/main/kotlin/com/convx/music/ui/ios/compat/IosCompatSurfaces.kt
++++ b/app/src/main/kotlin/com/convx/music/ui/ios/compat/IosCompatSurfaces.kt
+@@ -43,6 +43,9 @@ import zone.ien.hig.CupertinoSlider
+ import zone.ien.hig.rememberCupertinoSearchTextFieldState
+ import zone.ien.hig.CupertinoSurface
+ import zone.ien.hig.CupertinoSwitch
++import zone.ien.hig.CupertinoSwitchDefaults
++import zone.ien.hig.CupertinoLiquidSliderDefaults
++import com.convx.music.ui.theme.LocalAccentColor
+ import com.convx.music.ui.ios.foundation.IosTheme
+ 
+ /*
+@@ -225,6 +228,9 @@ fun Switch(
+     onCheckedChange = { onCheckedChange?.invoke(it) },
+     modifier = modifier,
+     enabled = enabled && onCheckedChange != null,
++    colors = CupertinoSwitchDefaults.colors(
++        checkedTrackColor = LocalAccentColor.current,
++    ),
+ )
+ 
+ /** M3's Slider call shape, drawn as cupertino's iOS slider. Steps mean the same thing. */
+@@ -246,6 +252,10 @@ fun Slider(
+     steps = steps,
+     backdrop = zone.ien.hig.utils.rememberDefaultBackdrop(),
+     onValueChangeFinished = onValueChangeFinished ?: {},
++    colors = CupertinoLiquidSliderDefaults.colors(
++        activeTrackColor = LocalAccentColor.current,
++        thumbColor = LocalAccentColor.current,
++    ),
+ )
+ 
+ /**
+diff --git a/app/src/main/kotlin/com/convx/music/ui/player/PlayerPhonePreview.kt b/app/src/main/kotlin/com/convx/music/ui/player/PlayerPhonePreview.kt
+index dbe727c..1be747f 100644
+--- a/app/src/main/kotlin/com/convx/music/ui/player/PlayerPhonePreview.kt
++++ b/app/src/main/kotlin/com/convx/music/ui/player/PlayerPhonePreview.kt
+@@ -84,6 +84,7 @@ import com.convx.music.R
+ import com.convx.music.constants.PlayerArtworkStyle
+ import com.convx.music.constants.PlayerBackgroundStyle
+ import com.convx.music.constants.PlayerHorizontalPadding
++import com.convx.music.ui.component.shapes.ContinuousRoundedRectangle
+ import com.convx.music.constants.PlayerLook
+ import com.convx.music.constants.SliderStyle
+ import com.convx.music.ui.component.BlurredBackdropImage
+@@ -302,6 +303,11 @@ private fun Artwork(spec: PlayerLookSpec, track: PreviewTrack?, isPlaying: Boole
+     }.coverStyle()
+     val rotation by rememberCoverRotation(cover, isPlaying && !v2)
+     val shape = cover.shape(if (v2) 10.dp else 16.dp)
++    val shadowShape = if (spec.design == PlayerDesign.CLOVER) {
++        ContinuousRoundedRectangle(if (v2) 10.dp else 16.dp)
++    } else {
++        shape
++    }
+     // V2 squares the cover down while paused, as Apple Music does.
+     val pausedScale = if (v2 && !isPlaying) 0.82f else 1f
+     Box(
+@@ -315,7 +321,7 @@ private fun Artwork(spec: PlayerLookSpec, track: PreviewTrack?, isPlaying: Boole
+         Box(
+             Modifier
+                 .fillMaxSize()
+-                .then(if (spec.thumbnailShadow || v2) Modifier.shadow(24.dp, shape) else Modifier)
++                .then(if (spec.thumbnailShadow || v2) Modifier.shadow(24.dp, shadowShape) else Modifier)
+                 .clip(shape)
+                 .graphicsLayer { rotationZ = rotation }
+                 .background(Color(0xFF2C2C2E)),
+diff --git a/app/src/main/kotlin/com/convx/music/ui/theme/Theme.kt b/app/src/main/kotlin/com/convx/music/ui/theme/Theme.kt
+index 19de0f1..4c4be6a 100644
+--- a/app/src/main/kotlin/com/convx/music/ui/theme/Theme.kt
++++ b/app/src/main/kotlin/com/convx/music/ui/theme/Theme.kt
+@@ -10,6 +10,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
+ import androidx.compose.material3.ColorScheme
+ import androidx.compose.material3.MaterialTheme
+ import com.convx.music.ui.ios.foundation.IosTheme
++import com.convx.music.ui.ios.foundation.LocalIosTint
+ import com.convx.music.ui.ios.foundation.darkIosColors
+ import com.convx.music.ui.ios.foundation.iosColorScheme
+ import com.convx.music.ui.ios.foundation.iosMaterialTypography
+@@ -102,6 +103,7 @@ fun ConvxTheme(
+ 
+     androidx.compose.runtime.CompositionLocalProvider(
+         LocalAccentColor provides themeColor,
++        LocalIosTint provides themeColor,
+         // Vibrator-backed: fires even with the system touch-vibration switch off.
+         androidx.compose.ui.platform.LocalHapticFeedback provides rememberAppHaptics(),
+         // The shared top bar sits outside screen themes, so expose the user's text override here.
+diff --git a/app/src/main/kotlin/com/convx/music/utils/YTPlayerUtils.kt b/app/src/main/kotlin/com/convx/music/utils/YTPlayerUtils.kt
+index 28c8229..921f228 100644
+--- a/app/src/main/kotlin/com/convx/music/utils/YTPlayerUtils.kt
++++ b/app/src/main/kotlin/com/convx/music/utils/YTPlayerUtils.kt
+@@ -268,6 +268,47 @@ object YTPlayerUtils {
+         .connectionPool(okhttp3.ConnectionPool(16, 5, java.util.concurrent.TimeUnit.MINUTES))
+         .build()
+ 
++    private val probeHttpClient: OkHttpClient by lazy {
++        httpClient.newBuilder()
++            .callTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
++            .connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
++            .readTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
++            .build()
++    }
++
++    private const val CLIENT_COOLDOWN_MS = 10 * 60 * 1000L
++    private val clientCooldowns = java.util.concurrent.ConcurrentHashMap<String, Long>()
++
++    @Volatile
++    var lastWorkingClient: YouTubeClient? = null
++        internal set
++
++    private fun isClientCoolingDown(client: YouTubeClient): Boolean {
++        val cooldownUntil = clientCooldowns[client.clientName] ?: return false
++        if (System.currentTimeMillis() < cooldownUntil) {
++            return true
++        }
++        clientCooldowns.remove(client.clientName)
++        return false
++    }
++
++    private fun tripCircuitBreaker(client: YouTubeClient, reason: String) {
++        Timber.tag(TAG).w("Circuit breaker tripped for ${client.clientName} (10m cooldown): $reason")
++        clientCooldowns[client.clientName] = System.currentTimeMillis() + CLIENT_COOLDOWN_MS
++    }
++
++    private fun isChallengeOrRateLimited(status: String?, reason: String?): Boolean {
++        val s = status?.uppercase(java.util.Locale.US).orEmpty()
++        val r = reason?.lowercase(java.util.Locale.US).orEmpty()
++        return s == "LOGIN_REQUIRED" ||
++            (s == "UNPLAYABLE" && (r.contains("bot") || r.contains("robot") || r.contains("sign in") || r.contains("rate"))) ||
++            r.contains("confirm you're not a robot") ||
++            r.contains("sign in to confirm") ||
++            r.contains("too many requests") ||
++            r.contains("429") ||
++            r.contains("403")
++    }
++
+     private val poTokenGenerator = PoTokenGenerator()
+ 
+     /** Detached so a slow metadata fetch outlives the playback call that started it. */
+@@ -830,15 +871,41 @@ object YTPlayerUtils {
+ 
+         Timber.tag(logTag).d("Attempting to get player response using MAIN_CLIENT: ${MAIN_CLIENT.clientName}")
+         PlaybackLogManager.log(PlaybackLogLevel.DEBUG, "Trying ${MAIN_CLIENT.clientName} (Main)")
+-        var mainPlayerResponse =
+-            YouTube.player(videoId, playlistId, MAIN_CLIENT, signatureTimestampFor(MAIN_CLIENT), poToken?.playerRequestPoToken).getOrThrow()
++        val mainResult = if (!isClientCoolingDown(MAIN_CLIENT)) {
++            runCatching {
++                YouTube.player(
++                    videoId,
++                    playlistId,
++                    MAIN_CLIENT,
++                    signatureTimestampFor(MAIN_CLIENT),
++                    poToken?.playerRequestPoToken
++                ).getOrThrow()
++            }.onFailure { e ->
++                Timber.tag(logTag).w(e, "MAIN_CLIENT player request failed: ${e.message}")
++                if (e.message?.contains("403") == true || e.message?.contains("429") == true) {
++                    tripCircuitBreaker(MAIN_CLIENT, "Player request error: ${e.message}")
++                }
++            }
++        } else {
++            Timber.tag(logTag).d("MAIN_CLIENT is cooling down, skipping to fallbacks")
++            Result.failure(Exception("MAIN_CLIENT is in cooldown"))
++        }
++
++        var mainPlayerResponse = mainResult.getOrNull()
++        if (mainPlayerResponse != null) {
++            val status = mainPlayerResponse.playabilityStatus.status
++            val reason = mainPlayerResponse.playabilityStatus.reason
++            if (isChallengeOrRateLimited(status, reason)) {
++                tripCircuitBreaker(MAIN_CLIENT, "Playability status $status: $reason")
++            }
++        }
+ 
+         var usedAgeRestrictedClient: YouTubeClient? = null
+         val wasOriginallyAgeRestricted: Boolean
+ 
+         // ANDROID_VR uses LOGIN_REQUIRED for bot detection, not age gating.
+-        val mainStatus = mainPlayerResponse.playabilityStatus.status
+-        val isAgeRestrictedFromResponse = isAgeRestrictedStatus(mainStatus)
++        val mainStatus = mainPlayerResponse?.playabilityStatus?.status
++        val isAgeRestrictedFromResponse = mainStatus?.let { isAgeRestrictedStatus(it) } ?: false
+         wasOriginallyAgeRestricted = isAgeRestrictedFromResponse
+ 
+         if (isAgeRestrictedFromResponse && isLoggedIn) {
+@@ -859,25 +926,39 @@ object YTPlayerUtils {
+         var streamPlayerResponse: PlayerResponse? = null
+         var retryMainPlayerResponse: PlayerResponse? = if (usedAgeRestrictedClient != null) mainPlayerResponse else null
+ 
+-        val currentStatus = mainPlayerResponse.playabilityStatus.status
+-        val isAgeRestricted = isAgeRestrictedStatus(currentStatus)
++        val currentStatus = mainPlayerResponse?.playabilityStatus?.status
++        val isAgeRestricted = currentStatus?.let { isAgeRestrictedStatus(it) } ?: false
+ 
+         if (isAgeRestricted) {
+             Timber.tag(logTag).d("Content is still age-restricted (status: $currentStatus), will try fallback clients")
+             Timber.tag(TAG).i("Age-restricted content detected: videoId=$videoId, status=$currentStatus")
+         }
+ 
+-        val isPrivateTrack = mainPlayerResponse.videoDetails?.musicVideoType == "MUSIC_VIDEO_TYPE_PRIVATELY_OWNED_TRACK"
++        val isPrivateTrack = mainPlayerResponse?.videoDetails?.musicVideoType == "MUSIC_VIDEO_TYPE_PRIVATELY_OWNED_TRACK"
++
++        // Build fallback client list, prioritizing lastWorkingClient if valid
++        val fallbackClients = buildList {
++            val last = lastWorkingClient
++            if (last != null && last != MAIN_CLIENT && last in STREAM_FALLBACK_CLIENTS && !isClientCoolingDown(last)) {
++                add(last)
++            }
++            for (fallback in STREAM_FALLBACK_CLIENTS) {
++                if (fallback != last) {
++                    add(fallback)
++                }
++            }
++        }
+ 
+         // Uploads start at TVHTML5; age-restricted videos skip the main client.
+-        // Other tracks try the main client first.
++        // Other tracks try the main client first if available.
+         val startIndex = when {
+-            isPrivateTrack -> STREAM_FALLBACK_CLIENTS.indexOf(TVHTML5).coerceAtLeast(0)
++            mainPlayerResponse == null || isClientCoolingDown(MAIN_CLIENT) -> 0
++            isPrivateTrack -> fallbackClients.indexOf(TVHTML5).coerceAtLeast(0)
+             isAgeRestricted -> 0
+             else -> -1
+         }
+ 
+-        clientLoop@ for (clientIndex in (startIndex until STREAM_FALLBACK_CLIENTS.size)) {
++        clientLoop@ for (clientIndex in (startIndex until fallbackClients.size)) {
+             format = null
+             streamUrl = null
+             streamExpiresInSeconds = null
+@@ -886,11 +967,18 @@ object YTPlayerUtils {
+             if (clientIndex == -1) {
+                 client = MAIN_CLIENT
+                 streamPlayerResponse = retryMainPlayerResponse ?: mainPlayerResponse
++                if (streamPlayerResponse == null || isClientCoolingDown(MAIN_CLIENT)) {
++                    continue
++                }
+                 Timber.tag(logTag).d("Trying stream from MAIN_CLIENT: ${client.clientName}")
+             } else {
+-                client = STREAM_FALLBACK_CLIENTS[clientIndex]
+-                Timber.tag(logTag).d("Trying fallback client ${clientIndex + 1}/${STREAM_FALLBACK_CLIENTS.size}: ${client.clientName}")
+-                PlaybackLogManager.log(PlaybackLogLevel.DEBUG, "Trying fallback [${clientIndex + 1}/${STREAM_FALLBACK_CLIENTS.size}]", client.clientName)
++                client = fallbackClients[clientIndex]
++                if (isClientCoolingDown(client)) {
++                    Timber.tag(logTag).d("Skipping client ${client.clientName} - in circuit breaker cooldown")
++                    continue
++                }
++                Timber.tag(logTag).d("Trying fallback client ${clientIndex + 1}/${fallbackClients.size}: ${client.clientName}")
++                PlaybackLogManager.log(PlaybackLogLevel.DEBUG, "Trying fallback [${clientIndex + 1}/${fallbackClients.size}]", client.clientName)
+ 
+                 if (client.loginRequired && !isLoggedIn && YouTube.cookie == null) {
+                     Timber.tag(logTag).d("Skipping client ${client.clientName} - requires login but user is not logged in")
+@@ -912,13 +1000,24 @@ object YTPlayerUtils {
+                 // Age-restricted responses do not need a timestamp for fallback clients.
+                 val clientSigTimestamp =
+                     if (wasOriginallyAgeRestricted) null else signatureTimestampFor(client)
+-                streamPlayerResponse =
+-                    YouTube.player(videoId, playlistId, client, clientSigTimestamp, clientPoToken).getOrNull()
++                val responseResult = YouTube.player(videoId, playlistId, client, clientSigTimestamp, clientPoToken)
++                responseResult.onFailure { e ->
++                    Timber.tag(logTag).w(e, "Fallback client ${client.clientName} request failed: ${e.message}")
++                    if (e.message?.contains("403") == true || e.message?.contains("429") == true) {
++                        tripCircuitBreaker(client, "Player request error: ${e.message}")
++                    }
++                }
++                streamPlayerResponse = responseResult.getOrNull()
++                val status = streamPlayerResponse?.playabilityStatus?.status
++                val reason = streamPlayerResponse?.playabilityStatus?.reason
++                if (isChallengeOrRateLimited(status, reason)) {
++                    tripCircuitBreaker(client, "Playability status $status: $reason")
++                }
+             }
+ 
+             if (streamPlayerResponse?.playabilityStatus?.status == "OK") {
+-                Timber.tag(logTag).d("Player response status OK for client: ${if (clientIndex == -1) MAIN_CLIENT.clientName else STREAM_FALLBACK_CLIENTS[clientIndex].clientName}")
+-                PlaybackLogManager.log(PlaybackLogLevel.INFO, "Player response OK", if (clientIndex == -1) MAIN_CLIENT.clientName else STREAM_FALLBACK_CLIENTS[clientIndex].clientName)
++                Timber.tag(logTag).d("Player response status OK for client: ${client.clientName}")
++                PlaybackLogManager.log(PlaybackLogLevel.INFO, "Player response OK", client.clientName)
+ 
+                 val hasDirectUrls = streamPlayerResponse.streamingData?.adaptiveFormats
+                     ?.any { !it.url.isNullOrEmpty() } == true
+@@ -941,94 +1040,100 @@ object YTPlayerUtils {
+                     streamUrl = findUrlOrNull(candidate, videoId, responseToUse, skipNewPipe = wasOriginallyAgeRestricted)
+                     if (streamUrl == null) continue
+ 
+-                val currentClient = if (clientIndex == -1) {
+-                    usedAgeRestrictedClient ?: MAIN_CLIENT
+-                } else {
+-                    STREAM_FALLBACK_CLIENTS[clientIndex]
+-                }
++                    val currentClient = if (clientIndex == -1) {
++                        usedAgeRestrictedClient ?: MAIN_CLIENT
++                    } else {
++                        client
++                    }
+ 
+-                val isPrivatelyOwnedTrack = streamPlayerResponse.videoDetails?.musicVideoType == "MUSIC_VIDEO_TYPE_PRIVATELY_OWNED_TRACK"
++                    val isPrivatelyOwnedTrack = streamPlayerResponse.videoDetails?.musicVideoType == "MUSIC_VIDEO_TYPE_PRIVATELY_OWNED_TRACK"
+ 
+-                // Apply n-transform FIRST for web clients (main branch order - critical!)
+-                if (currentClient.useWebPoTokens) {
+-                    try {
+-                        Timber.tag(logTag).d("Applying n-transform to stream URL for ${currentClient.clientName}")
+-                        val transformed = EjsNTransformSolver.transformNParamInUrl(streamUrl)
+-                        if (transformed != streamUrl) {
+-                            streamUrl = transformed
+-                            Timber.tag(logTag).d("N-transform applied successfully")
++                    // Apply n-transform FIRST for web clients (main branch order - critical!)
++                    if (currentClient.useWebPoTokens) {
++                        try {
++                            Timber.tag(logTag).d("Applying n-transform to stream URL for ${currentClient.clientName}")
++                            val transformed = EjsNTransformSolver.transformNParamInUrl(streamUrl)
++                            if (transformed != streamUrl) {
++                                streamUrl = transformed
++                                Timber.tag(logTag).d("N-transform applied successfully")
++                            }
++                        } catch (e: Exception) {
++                            Timber.tag(logTag).e(e, "N-transform failed: ${e.message}")
+                         }
+-                    } catch (e: Exception) {
+-                        Timber.tag(logTag).e(e, "N-transform failed: ${e.message}")
+                     }
+-                }
+ 
+-                // Apply PoToken SECOND (after n-transform - main branch order)
+-                // PoToken is base64; URL-encoding it breaks validation.
+-                if (currentClient.useWebPoTokens && poToken?.streamingDataPoToken != null) {
+-                    Timber.tag(logTag).d("Appending pot= parameter to stream URL")
+-                    val separator = if ("?" in streamUrl) "&" else "?"
+-                    streamUrl = "${streamUrl}${separator}pot=${poToken.streamingDataPoToken}"
+-                }
++                    // Apply PoToken SECOND (after n-transform - main branch order)
++                    // PoToken is base64; URL-encoding it breaks validation.
++                    if (currentClient.useWebPoTokens && poToken?.streamingDataPoToken != null) {
++                        Timber.tag(logTag).d("Appending pot= parameter to stream URL")
++                        val separator = if ("?" in streamUrl) "&" else "?"
++                        streamUrl = "${streamUrl}${separator}pot=${poToken.streamingDataPoToken}"
++                    }
+ 
+-                streamExpiresInSeconds = streamPlayerResponse.streamingData?.expiresInSeconds
+-                if (streamExpiresInSeconds == null) {
+-                    // Keep a resolved stream if the response omits its expiry.
+-                    streamExpiresInSeconds = DEFAULT_STREAM_EXPIRY_SECONDS
+-                }
++                    streamExpiresInSeconds = streamPlayerResponse.streamingData?.expiresInSeconds
++                    if (streamExpiresInSeconds == null) {
++                        // Keep a resolved stream if the response omits its expiry.
++                        streamExpiresInSeconds = DEFAULT_STREAM_EXPIRY_SECONDS
++                    }
+ 
+-                Timber.tag(logTag).d("Stream expires in: $streamExpiresInSeconds seconds")
++                    Timber.tag(logTag).d("Stream expires in: $streamExpiresInSeconds seconds")
+ 
+-                val urlHost = try { java.net.URL(streamUrl).host } catch (e: Exception) { "unknown" }
+-                Timber.tag(logTag).d("Stream URL host: $urlHost, pot length: ${poToken?.streamingDataPoToken?.length ?: 0}")
++                    val urlHost = try { java.net.URL(streamUrl).host } catch (e: Exception) { "unknown" }
++                    Timber.tag(logTag).d("Stream URL host: $urlHost, pot length: ${poToken?.streamingDataPoToken?.length ?: 0}")
+ 
+-                if (clientIndex == STREAM_FALLBACK_CLIENTS.size - 1 || isPrivatelyOwnedTrack) {
+-                    if (isPrivatelyOwnedTrack) {
+-                        Timber.tag(logTag).d("Skipping validation for privately owned track: ${currentClient.clientName}")
+-                    } else {
+-                        Timber.tag(logTag).d("Using last fallback client without validation: ${STREAM_FALLBACK_CLIENTS[clientIndex].clientName}")
++                    if (clientIndex == fallbackClients.size - 1 || isPrivatelyOwnedTrack) {
++                        if (isPrivatelyOwnedTrack) {
++                            Timber.tag(logTag).d("Skipping validation for privately owned track: ${currentClient.clientName}")
++                        } else {
++                            Timber.tag(logTag).d("Using last fallback client without validation: ${currentClient.clientName}")
++                        }
++                        Timber.tag(TAG).i("Playback: client=${currentClient.clientName}, videoId=$videoId, private=$isPrivatelyOwnedTrack")
++                        lastWorkingClient = currentClient
++                        clientCooldowns.remove(currentClient.clientName)
++                        break@clientLoop
+                     }
+-                    Timber.tag(TAG).i("Playback: client=${currentClient.clientName}, videoId=$videoId, private=$isPrivatelyOwnedTrack")
+-                    break@clientLoop
+-                }
+-
+-                if (validateStatus(streamUrl)) {
+-                    Timber.tag(logTag).d("Stream validated successfully with client: ${currentClient.clientName}")
+-                    PlaybackLogManager.log(PlaybackLogLevel.INFO, "Stream validated", currentClient.clientName)
+-                    Timber.tag(TAG).i("Playback: client=${currentClient.clientName}, videoId=$videoId")
+-                    break@clientLoop
+-                } else {
+-                    Timber.tag(logTag).d("Stream validation failed for client: ${currentClient.clientName}")
+-
+-                    // For web clients: try alternate n-transform and re-validate (Zemer approach)
+-                    if (currentClient.useWebPoTokens) {
+-                        var nTransformWorked = false
+ 
+-                        try {
+-                            val nTransformed = CipherDeobfuscator.transformNParamInUrl(streamUrl)
+-                            if (nTransformed != streamUrl) {
+-                                Timber.tag(logTag).d("CipherDeobfuscator n-transform applied, re-validating...")
+-                                if (validateStatus(nTransformed)) {
+-                                    Timber.tag(logTag).d("N-transformed URL VALIDATED OK!")
+-                                    streamUrl = nTransformed
+-                                    nTransformWorked = true
+-                                    Timber.tag(TAG).i("Playback: client=${currentClient.clientName}, videoId=$videoId (cipher n-transform)")
++                    val clientForInitialProbe = if (currentClient.useWebPoTokens) null else currentClient
++                    if (validateStatus(streamUrl, clientForInitialProbe)) {
++                        Timber.tag(logTag).d("Stream validated successfully with client: ${currentClient.clientName}")
++                        PlaybackLogManager.log(PlaybackLogLevel.INFO, "Stream validated", currentClient.clientName)
++                        Timber.tag(TAG).i("Playback: client=${currentClient.clientName}, videoId=$videoId")
++                        lastWorkingClient = currentClient
++                        clientCooldowns.remove(currentClient.clientName)
++                        break@clientLoop
++                    } else {
++                        Timber.tag(logTag).d("Stream validation failed for client: ${currentClient.clientName}")
++
++                        // For web clients: try alternate n-transform and re-validate (Zemer approach)
++                        if (currentClient.useWebPoTokens) {
++                            var nTransformWorked = false
++
++                            try {
++                                val nTransformed = CipherDeobfuscator.transformNParamInUrl(streamUrl)
++                                if (nTransformed != streamUrl) {
++                                    Timber.tag(logTag).d("CipherDeobfuscator n-transform applied, re-validating...")
++                                    if (validateStatus(nTransformed, currentClient)) {
++                                        Timber.tag(logTag).d("N-transformed URL VALIDATED OK!")
++                                        streamUrl = nTransformed
++                                        nTransformWorked = true
++                                        Timber.tag(TAG).i("Playback: client=${currentClient.clientName}, videoId=$videoId (cipher n-transform)")
++                                        lastWorkingClient = currentClient
++                                        clientCooldowns.remove(currentClient.clientName)
++                                    }
+                                 }
++                            } catch (e: Exception) {
++                                Timber.tag(logTag).e(e, "CipherDeobfuscator n-transform error")
+                             }
+-                        } catch (e: Exception) {
+-                            Timber.tag(logTag).e(e, "CipherDeobfuscator n-transform error")
+-                        }
+ 
+-                        if (nTransformWorked) break@clientLoop
++                            if (nTransformWorked) break@clientLoop
++                        }
+                     }
+                 }
+-                }
+             } else {
+                 val status = streamPlayerResponse?.playabilityStatus?.status ?: "Unknown"
+                 val reason = streamPlayerResponse?.playabilityStatus?.reason ?: "No reason"
+                 Timber.tag(logTag).d("Player response status not OK: $status, reason: $reason")
+                 PlaybackLogManager.log(PlaybackLogLevel.WARNING, "Client failed: ${client.clientName}", "$status: $reason")
+-                
+             }
+         }
+ 
+@@ -1077,15 +1182,16 @@ object YTPlayerUtils {
+         val expiresInSeconds = streamExpiresInSeconds ?: DEFAULT_STREAM_EXPIRY_SECONDS
+ 
+         Timber.tag(logTag).d("Successfully obtained playback data with format: ${format.mimeType}, bitrate: ${format.bitrate}")
+-        // Prefer authenticated metadata when ready; otherwise use the main response.
++        // Prefer authenticated metadata when ready; otherwise use the main response or successful stream response.
+         val metadataResponse = metaDeferred?.let { withTimeoutOrNull(MetadataWaitMs) { it.await() } }
+         if (metaDeferred != null && metadataResponse == null) {
+             Timber.tag(logTag).w("Metadata not ready within ${MetadataWaitMs}ms -- playing without it")
+         }
++        val baseResponse = mainPlayerResponse ?: streamPlayerResponse
+         PlaybackData(
+-            metadataResponse?.playerConfig?.audioConfig ?: mainPlayerResponse.playerConfig?.audioConfig,
+-            metadataResponse?.videoDetails ?: mainPlayerResponse.videoDetails,
+-            metadataResponse?.playbackTracking ?: mainPlayerResponse.playbackTracking,
++            metadataResponse?.playerConfig?.audioConfig ?: baseResponse?.playerConfig?.audioConfig,
++            metadataResponse?.videoDetails ?: baseResponse?.videoDetails,
++            metadataResponse?.playbackTracking ?: baseResponse?.playbackTracking,
+             format,
+             streamUrl,
+             expiresInSeconds,
+@@ -1108,7 +1214,7 @@ object YTPlayerUtils {
+             .onFailure { Timber.tag(logTag).e(it, "Failed to fetch metadata") }
+     }
+ 
+-    private fun validateStatus(url: String): Boolean {
++    private fun validateStatus(url: String, client: YouTubeClient? = null): Boolean {
+         Timber.tag(logTag).d("Validating stream URL status")
+         try {
+             // Use a one-byte ranged GET: YouTube can accept HEAD for a stream it won't serve.
+@@ -1124,13 +1230,19 @@ object YTPlayerUtils {
+             // use {} rather than leaking the (1-byte) body back into the pool unread.
+             // 206 is the honoured range; a server that ignores Range answers 200. Both
+             // mean bytes are being served, which is the only thing this asks.
+-            val (isSuccessful, code) = httpClient.newCall(requestBuilder.build()).execute()
++            val (isSuccessful, code) = probeHttpClient.newCall(requestBuilder.build()).execute()
+                 .use { it.isSuccessful to it.code }
+             Timber.tag(logTag).d("Stream URL validation result: ${if (isSuccessful) "Success" else "Failed"} ($code)")
++            if (code == 403 || code == 429) {
++                client?.let { tripCircuitBreaker(it, "Probe returned HTTP $code") }
++            }
+             return isSuccessful
+         } catch (e: Exception) {
+             Timber.tag(logTag).e(e, "Stream URL validation failed with exception")
+             reportException(e)
++            if (e.message?.contains("403") == true || e.message?.contains("429") == true) {
++                client?.let { tripCircuitBreaker(it, "Probe failed with ${e.message}") }
++            }
+         }
+         return false
+     }
+diff --git a/app/src/main/kotlin/com/convx/music/utils/cipher/CipherWebView.kt b/app/src/main/kotlin/com/convx/music/utils/cipher/CipherWebView.kt
+index 54fe829..0a44be7 100644
+--- a/app/src/main/kotlin/com/convx/music/utils/cipher/CipherWebView.kt
++++ b/app/src/main/kotlin/com/convx/music/utils/cipher/CipherWebView.kt
+@@ -23,7 +23,8 @@ class CipherWebView private constructor(
+ ) {
+     private val webView = WebView(context)
+     private var sigContinuation: Continuation<String>? = null
+-    private var nContinuation: Continuation<String>? = null
++    private val nContinuations = java.util.concurrent.ConcurrentHashMap<String, Continuation<String>>()
++    private val requestIdCounter = java.util.concurrent.atomic.AtomicLong(0)
+ 
+     @Volatile
+     var nFunctionAvailable: Boolean = false
+@@ -110,21 +111,21 @@ function deobfuscateSig(funcName, constantArg, obfuscatedSig) {
+     }
+ }
+ 
+-function transformN(nValue) {
++function transformN(reqId, nValue) {
+     try {
+         var func = window._nTransformFunc;
+         if (typeof func !== 'function') {
+-            CipherBridge.onNError("N-transform func not available (type: " + typeof func + ")");
++            CipherBridge.onNError(reqId, "N-transform func not available (type: " + typeof func + ")");
+             return;
+         }
+         var result = func(nValue);
+         if (result === undefined || result === null) {
+-            CipherBridge.onNError("N-transform returned null/undefined");
++            CipherBridge.onNError(reqId, "N-transform returned null/undefined");
+             return;
+         }
+-        CipherBridge.onNResult(String(result));
++        CipherBridge.onNResult(reqId, String(result));
+     } catch (error) {
+-        CipherBridge.onNError(error + "\n" + (error.stack || ""));
++        CipherBridge.onNError(reqId, error + "\n" + (error.stack || ""));
+     }
+ }
+ 
+@@ -259,9 +260,13 @@ function discoverAndInit() {
+ 
+         return withContext(Dispatchers.Main) {
+             suspendCancellableCoroutine { cont ->
+-                nContinuation = cont
++                val reqId = requestIdCounter.incrementAndGet().toString()
++                nContinuations[reqId] = cont
++                cont.invokeOnCancellation {
++                    nContinuations.remove(reqId)
++                }
+                 webView.evaluateJavascript(
+-                    "transformN('${escapeJsString(nValue)}')",
++                    "transformN('$reqId', '${escapeJsString(nValue)}')",
+                     null
+                 )
+             }
+@@ -269,20 +274,31 @@ function discoverAndInit() {
+     }
+ 
+     @JavascriptInterface
+-    fun onNResult(result: String) {
+-        Timber.tag(TAG).d("N-transform result: ${result.take(50)}...")
+-        nContinuation?.resume(result)
+-        nContinuation = null
++    fun onNResult(reqId: String, result: String) {
++        Timber.tag(TAG).d("N-transform result for $reqId: ${result.take(50)}...")
++        nContinuations.remove(reqId)?.let { cont ->
++            runCatching { cont.resume(result) }
++        }
+     }
+ 
+     @JavascriptInterface
+-    fun onNError(error: String) {
+-        Timber.tag(TAG).e("N-transform error: $error")
+-        nContinuation?.resumeWithException(CipherException("N-transform failed: $error"))
+-        nContinuation = null
++    fun onNError(reqId: String, error: String) {
++        Timber.tag(TAG).e("N-transform error for $reqId: $error")
++        nContinuations.remove(reqId)?.let { cont ->
++            runCatching { cont.resumeWithException(CipherException("N-transform failed: $error")) }
++        }
+     }
+ 
+     fun close() {
++        sigContinuation?.let {
++            sigContinuation = null
++            runCatching { it.resumeWithException(CipherException("CipherWebView was closed")) }
++        }
++        val pending = ArrayList(nContinuations.values)
++        nContinuations.clear()
++        pending.forEach { cont ->
++            runCatching { cont.resumeWithException(CipherException("CipherWebView was closed")) }
++        }
+         webView.clearHistory()
+         webView.clearCache(true)
+         webView.loadUrl("about:blank")
+diff --git a/app/src/main/kotlin/com/convx/music/utils/sabr/EjsNTransformSolver.kt b/app/src/main/kotlin/com/convx/music/utils/sabr/EjsNTransformSolver.kt
+index 6ef3a66..53aa2d7 100644
+--- a/app/src/main/kotlin/com/convx/music/utils/sabr/EjsNTransformSolver.kt
++++ b/app/src/main/kotlin/com/convx/music/utils/sabr/EjsNTransformSolver.kt
+@@ -106,7 +106,8 @@ object EjsNTransformSolver {
+         private val initContinuation: Continuation<SolverWebView>,
+     ) {
+         private val webView = WebView(context)
+-        private var nContinuation: Continuation<String>? = null
++        private val nContinuations = java.util.concurrent.ConcurrentHashMap<String, Continuation<String>>()
++        private val requestIdCounter = java.util.concurrent.atomic.AtomicLong(0)
+ 
+         @Volatile
+         var nFunctionAvailable: Boolean = false
+@@ -203,20 +204,20 @@ function initSolver() {
+     }
+ }
+ 
+-function transformN(nValue) {
++function transformN(reqId, nValue) {
+     try {
+         if (!_nSolver) {
+-            EjsBridge.onNError('N solver not available');
++            EjsBridge.onNError(reqId, 'N solver not available');
+             return;
+         }
+         var result = _nSolver(nValue);
+         if (result === undefined || result === null) {
+-            EjsBridge.onNError('N solver returned null/undefined');
++            EjsBridge.onNError(reqId, 'N solver returned null/undefined');
+             return;
+         }
+-        EjsBridge.onNResult(String(result));
++        EjsBridge.onNResult(reqId, String(result));
+     } catch(e) {
+-        EjsBridge.onNError(e.toString() + '\n' + (e.stack || ''));
++        EjsBridge.onNError(reqId, e.toString() + '\n' + (e.stack || ''));
+     }
+ }
+ </script>
+@@ -253,9 +254,13 @@ function transformN(nValue) {
+ 
+             return withContext(Dispatchers.Main) {
+                 suspendCancellableCoroutine { cont ->
+-                    nContinuation = cont
++                    val reqId = requestIdCounter.incrementAndGet().toString()
++                    nContinuations[reqId] = cont
++                    cont.invokeOnCancellation {
++                        nContinuations.remove(reqId)
++                    }
+                     webView.evaluateJavascript(
+-                        "transformN('${escapeJsString(nValue)}')",
++                        "transformN('$reqId', '${escapeJsString(nValue)}')",
+                         null
+                     )
+                 }
+@@ -263,20 +268,27 @@ function transformN(nValue) {
+         }
+ 
+         @JavascriptInterface
+-        fun onNResult(result: String) {
+-            Timber.tag(TAG).d("N-transform result: ${result.take(50)}")
+-            nContinuation?.resume(result)
+-            nContinuation = null
++        fun onNResult(reqId: String, result: String) {
++            Timber.tag(TAG).d("N-transform result for $reqId: ${result.take(50)}")
++            nContinuations.remove(reqId)?.let { cont ->
++                runCatching { cont.resume(result) }
++            }
+         }
+ 
+         @JavascriptInterface
+-        fun onNError(error: String) {
+-            Timber.tag(TAG).e("N-transform error: $error")
+-            nContinuation?.resumeWithException(SabrException("EJS n-transform failed: $error"))
+-            nContinuation = null
++        fun onNError(reqId: String, error: String) {
++            Timber.tag(TAG).e("N-transform error for $reqId: $error")
++            nContinuations.remove(reqId)?.let { cont ->
++                runCatching { cont.resumeWithException(SabrException("EJS n-transform failed: $error")) }
++            }
+         }
+ 
+         fun close() {
++            val pending = ArrayList(nContinuations.values)
++            nContinuations.clear()
++            pending.forEach { cont ->
++                runCatching { cont.resumeWithException(SabrException("EJS solver WebView was closed")) }
++            }
+             webView.clearHistory()
+             webView.clearCache(true)
+             webView.loadUrl("about:blank")
+diff --git a/app/src/main/res/xml/backup_rules.xml b/app/src/main/res/xml/backup_rules.xml
+index c94ac78..630d1fd 100644
+--- a/app/src/main/res/xml/backup_rules.xml
++++ b/app/src/main/res/xml/backup_rules.xml
+@@ -11,4 +11,7 @@
+     <exclude
+         domain="database"
+         path="exoplayer_internal.db" />
++    <exclude
++        domain="file"
++        path="datastore/settings.preferences_pb" />
+ </full-backup-content>
+diff --git a/app/src/main/res/xml/data_extraction_rules.xml b/app/src/main/res/xml/data_extraction_rules.xml
+index ba773b2..46240a0 100644
+--- a/app/src/main/res/xml/data_extraction_rules.xml
++++ b/app/src/main/res/xml/data_extraction_rules.xml
+@@ -16,6 +16,9 @@
+         <exclude
+             domain="database"
+             path="exoplayer_internal.db" />
++        <exclude
++            domain="file"
++            path="datastore/settings.preferences_pb" />
+     </cloud-backup>
+     <device-transfer>
+         <exclude domain="sharedpref" path="spotify_provider_credentials.xml" />
+@@ -29,5 +32,8 @@
+         <exclude
+             domain="database"
+             path="exoplayer_internal.db" />
++        <exclude
++            domain="file"
++            path="datastore/settings.preferences_pb" />
+     </device-transfer>
+ </data-extraction-rules>
+diff --git a/app/src/test/kotlin/com/convx/music/playback/audio/SpatialAudioProcessorTest.kt b/app/src/test/kotlin/com/convx/music/playback/audio/SpatialAudioProcessorTest.kt
+index 19029c4..8dab834 100644
+--- a/app/src/test/kotlin/com/convx/music/playback/audio/SpatialAudioProcessorTest.kt
++++ b/app/src/test/kotlin/com/convx/music/playback/audio/SpatialAudioProcessorTest.kt
+@@ -22,6 +22,15 @@ class SpatialAudioProcessorTest {
+         assertFalse(float.isActive)
+     }
+ 
++    @Test
++    fun `isActive is true only when enabled and configured with supported format`() {
++        val disabled = configured(enabled = false)
++        assertFalse(disabled.isActive)
++
++        val enabled = configured(enabled = true)
++        assertTrue(enabled.isActive)
++    }
++
+     @Test
+     fun `disabled is a byte-exact passthrough`() {
+         val processor = configured(enabled = false)
+-- 
+2.56.0.windows.3
+

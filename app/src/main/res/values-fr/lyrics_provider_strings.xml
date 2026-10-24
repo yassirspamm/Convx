@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="lyrics_choose_provider">Choisir un fournisseur de paroles</string>
+    <string name="lyrics_provider_current">Paroles actuelles</string>
+    <string name="lyrics_provider_found">Disponible — appuyez pour changer</string>
+    <string name="lyrics_provider_not_found">Aucune parole trouvée</string>
+    <string name="lyrics_provider_fetching">Chargement des paroles…</string>
+    <string name="lyrics_provider_not_fetched">Appuyez pour chercher sur ce fournisseur</string>
+    <string name="lyrics_provider_retry">Échec de la recherche — appuyez pour réessayer</string>
+    <string name="lyrics_provider_disabled">Désactivé dans les paramètres des paroles</string>
+    <string name="lyrics_provider_unsupported">Indisponible pour les fichiers locaux</string>
+    <string name="lyrics_provider_lookup_failed">Impossible de changer de fournisseur. Vos paroles actuelles restent sélectionnées.</string>
+</resources>
